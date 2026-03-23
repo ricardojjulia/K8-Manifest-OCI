@@ -1,0 +1,198 @@
+{
+  "dynakubeSource": "/Users/Ricardo.Julia/K8-Manifest-OCI/dynakube_OCI.yaml",
+  "selectedProfile": "dynakube-driven",
+  "detectedFeatures": {
+    "logMonitoring": true,
+    "activeGate": true,
+    "oneAgentModes": [
+      "classicFullStack"
+    ],
+    "activeGateCapabilities": [
+      "dynatrace-api",
+      "kubernetes-monitoring",
+      "routing"
+    ]
+  },
+  "keptBundleResourceCount": 29,
+  "droppedBundleResourceCount": 15,
+  "keptResources": [
+    {
+      "kind": "ClusterRole",
+      "name": "dynatrace-kubernetes-monitoring"
+    },
+    {
+      "kind": "ClusterRole",
+      "name": "dynatrace-kubernetes-monitoring-default"
+    },
+    {
+      "kind": "ClusterRole",
+      "name": "dynatrace-logmonitoring"
+    },
+    {
+      "kind": "ClusterRole",
+      "name": "dynatrace-operator"
+    },
+    {
+      "kind": "ClusterRole",
+      "name": "dynatrace-webhook"
+    },
+    {
+      "kind": "ClusterRoleBinding",
+      "name": "dynatrace-kubernetes-monitoring"
+    },
+    {
+      "kind": "ClusterRoleBinding",
+      "name": "dynatrace-logmonitoring"
+    },
+    {
+      "kind": "ClusterRoleBinding",
+      "name": "dynatrace-logmonitoring-fullstack"
+    },
+    {
+      "kind": "ClusterRoleBinding",
+      "name": "dynatrace-operator"
+    },
+    {
+      "kind": "ClusterRoleBinding",
+      "name": "dynatrace-webhook"
+    },
+    {
+      "kind": "CustomResourceDefinition",
+      "name": "dynakubes.dynatrace.com"
+    },
+    {
+      "kind": "Deployment",
+      "name": "dynatrace-operator"
+    },
+    {
+      "kind": "Deployment",
+      "name": "dynatrace-webhook"
+    },
+    {
+      "kind": "MutatingWebhookConfiguration",
+      "name": "dynatrace-webhook"
+    },
+    {
+      "kind": "Namespace",
+      "name": "dynatrace"
+    },
+    {
+      "kind": "PodDisruptionBudget",
+      "name": "dynatrace-webhook"
+    },
+    {
+      "kind": "Role",
+      "name": "dynatrace-operator"
+    },
+    {
+      "kind": "Role",
+      "name": "dynatrace-operator-supportability"
+    },
+    {
+      "kind": "Role",
+      "name": "dynatrace-webhook"
+    },
+    {
+      "kind": "RoleBinding",
+      "name": "dynatrace-operator"
+    },
+    {
+      "kind": "RoleBinding",
+      "name": "dynatrace-operator-supportability"
+    },
+    {
+      "kind": "RoleBinding",
+      "name": "dynatrace-webhook"
+    },
+    {
+      "kind": "Service",
+      "name": "dynatrace-webhook"
+    },
+    {
+      "kind": "ServiceAccount",
+      "name": "dynatrace-activegate"
+    },
+    {
+      "kind": "ServiceAccount",
+      "name": "dynatrace-dynakube-oneagent"
+    },
+    {
+      "kind": "ServiceAccount",
+      "name": "dynatrace-logmonitoring"
+    },
+    {
+      "kind": "ServiceAccount",
+      "name": "dynatrace-operator"
+    },
+    {
+      "kind": "ServiceAccount",
+      "name": "dynatrace-webhook"
+    },
+    {
+      "kind": "ValidatingWebhookConfiguration",
+      "name": "dynatrace-webhook"
+    }
+  ],
+  "droppedResources": [
+    {
+      "kind": "ClusterRole",
+      "name": "dynatrace-extensions-prometheus"
+    },
+    {
+      "kind": "ClusterRole",
+      "name": "dynatrace-kubernetes-monitoring-kspm"
+    },
+    {
+      "kind": "ClusterRole",
+      "name": "dynatrace-telemetry-ingest"
+    },
+    {
+      "kind": "ClusterRoleBinding",
+      "name": "dynatrace-extensions-prometheus"
+    },
+    {
+      "kind": "ClusterRoleBinding",
+      "name": "dynatrace-telemetry-ingest"
+    },
+    {
+      "kind": "CustomResourceDefinition",
+      "name": "edgeconnects.dynatrace.com"
+    },
+    {
+      "kind": "Role",
+      "name": "dynatrace-extension-controller-database"
+    },
+    {
+      "kind": "Role",
+      "name": "dynatrace-sql-ext-exec"
+    },
+    {
+      "kind": "RoleBinding",
+      "name": "dynatrace-extension-controller-database"
+    },
+    {
+      "kind": "RoleBinding",
+      "name": "dynatrace-sql-ext-exec"
+    },
+    {
+      "kind": "ServiceAccount",
+      "name": "dynatrace-edgeconnect"
+    },
+    {
+      "kind": "ServiceAccount",
+      "name": "dynatrace-extension-controller"
+    },
+    {
+      "kind": "ServiceAccount",
+      "name": "dynatrace-node-config-collector"
+    },
+    {
+      "kind": "ServiceAccount",
+      "name": "dynatrace-otel-collector"
+    },
+    {
+      "kind": "ServiceAccount",
+      "name": "dynatrace-sql-ext-exec"
+    }
+  ]
+}

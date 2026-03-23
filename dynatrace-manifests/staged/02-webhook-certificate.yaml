@@ -1,0 +1,35 @@
+# Self-Signed Certificate Issuer for Dynatrace Webhook
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: dynatrace-selfsigned-issuer
+  labels:
+    app.kubernetes.io/name: dynatrace-operator
+spec:
+  selfSigned: {}
+
+---
+# Certificate Resource for Dynatrace Webhook
+# This will generate a self-signed certificate that cert-manager automatically injects
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: dynatrace-webhook
+  namespace: dynatrace
+  labels:
+    app.kubernetes.io/name: dynatrace-operator
+    app.kubernetes.io/component: webhook
+spec:
+  secretName: dynatrace-webhook-certs
+  duration: 2160h # 90 days
+  renewBefore: 360h # 15 days
+  commonName: "dynatrace-webhook.dynatrace.svc"
+  dnsNames:
+  - dynatrace-webhook
+  - dynatrace-webhook.dynatrace
+  - dynatrace-webhook.dynatrace.svc
+  - dynatrace-webhook.dynatrace.svc.cluster.local
+  issuerRef:
+    name: dynatrace-selfsigned-issuer
+    kind: ClusterIssuer

@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Archives
+*.zip
+*.tar.gz
+*.tgz

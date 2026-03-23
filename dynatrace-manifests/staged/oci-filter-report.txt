@@ -1,0 +1,66 @@
+OCI Filter Report
+=================
+
+DynaKube source: /Users/Ricardo.Julia/K8-Manifest-OCI/dynakube_OCI.yaml
+
+Selected profile: classic
+
+Detected features
+-----------------
+- logMonitoring: enabled
+- activeGate: enabled
+- oneAgent modes: classicFullStack
+- activeGate capabilities: dynatrace-api, kubernetes-monitoring, routing
+
+Kept bundle resources: 29
+Dropped bundle resources: 15
+
+Kept resources
+--------------
+  - ClusterRole/dynatrace-kubernetes-monitoring
+  - ClusterRole/dynatrace-kubernetes-monitoring-default
+  - ClusterRole/dynatrace-logmonitoring
+  - ClusterRole/dynatrace-operator
+  - ClusterRole/dynatrace-webhook
+  - ClusterRoleBinding/dynatrace-kubernetes-monitoring
+  - ClusterRoleBinding/dynatrace-logmonitoring
+  - ClusterRoleBinding/dynatrace-logmonitoring-fullstack
+  - ClusterRoleBinding/dynatrace-operator
+  - ClusterRoleBinding/dynatrace-webhook
+  - CustomResourceDefinition/dynakubes.dynatrace.com
+  - Deployment/dynatrace-operator
+  - Deployment/dynatrace-webhook
+  - MutatingWebhookConfiguration/dynatrace-webhook
+  - Namespace/dynatrace
+  - PodDisruptionBudget/dynatrace-webhook
+  - Role/dynatrace-operator
+  - Role/dynatrace-operator-supportability
+  - Role/dynatrace-webhook
+  - RoleBinding/dynatrace-operator
+  - RoleBinding/dynatrace-operator-supportability
+  - RoleBinding/dynatrace-webhook
+  - Service/dynatrace-webhook
+  - ServiceAccount/dynatrace-activegate
+  - ServiceAccount/dynatrace-dynakube-oneagent
+  - ServiceAccount/dynatrace-logmonitoring
+  - ServiceAccount/dynatrace-operator
+  - ServiceAccount/dynatrace-webhook
+  - ValidatingWebhookConfiguration/dynatrace-webhook
+
+Dropped resources
+-----------------
+  - ClusterRole/dynatrace-extensions-prometheus
+  - ClusterRole/dynatrace-kubernetes-monitoring-kspm
+  - ClusterRole/dynatrace-telemetry-ingest
+  - ClusterRoleBinding/dynatrace-extensions-prometheus
+  - ClusterRoleBinding/dynatrace-telemetry-ingest
+  - CustomResourceDefinition/edgeconnects.dynatrace.com
+  - Role/dynatrace-extension-controller-database
+  - Role/dynatrace-sql-ext-exec
+  - RoleBinding/dynatrace-extension-controller-database
+  - RoleBinding/dynatrace-sql-ext-exec
+  - ServiceAccount/dynatrace-edgeconnect
+  - ServiceAccount/dynatrace-extension-controller
+  - ServiceAccount/dynatrace-node-config-collector
+  - ServiceAccount/dynatrace-otel-collector
+  - ServiceAccount/dynatrace-sql-ext-exec
