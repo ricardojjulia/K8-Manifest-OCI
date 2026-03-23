@@ -180,5 +180,3 @@ The upstream Dynatrace Operator bundle ships with a webhook deployment that moun
 | Operator version | v1.8.1 |
 | Image | `public.ecr.aws/dynatrace/dynatrace-operator:v1.8.1` |
 | Target namespace | `dynatrace` |
-| API URL | `https://fzj25496.live.dynatrace.com/api` |
-| Cluster | OCI Kubernetes |
