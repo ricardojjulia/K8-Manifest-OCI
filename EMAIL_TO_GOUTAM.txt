@@ -1,0 +1,94 @@
+Subject: Updated Dynatrace Operator K8s Manifests - New Fix (v3)
+
+Hi Goutam,
+
+Thanks for sharing the detailed logs from your deployment attempt. Based on your findings, we've identified and resolved three distinct issues in the cert-manager integration:
+
+**Issues Fixed in This Release:**
+
+1. **Missing ACME CRDs**
+   - Added `orders.acme.cert-manager.io` (Namespaced)
+   - Added `challenges.acme.cert-manager.io` (Namespaced)
+   - Root cause: Cert-manager requires these CRDs for ACME-based certificate provisioning; without them, the controller fails when attempting to create order/challenge resources
+
+2. **Incomplete RBAC for cert-manager Controller**
+   - Added permissions for `acme.cert-manager.io` (orders, challenges resources)
+   - Added permissions for core `services` (get, list, watch)
+   - Added permissions for `networking.k8s.io/ingresses` (get, list, watch)
+   - Root cause: The controller needs these permissions to manage certificate lifecycle and validate webhook connectivity
+
+3. **Race Condition in Deployment Flow**
+   - Added endpoint readiness gate in `apply-staged.sh` that polls for `cert-manager-webhook` service endpoints before applying the webhook certificate manifest
+   - Root cause: This directly addresses your error `no endpoints available for service "cert-manager-webhook"` — the webhook pod was Running but not yet registered in the service's endpoint list
+
+**How to Get the Update:**
+
+The updated manifests are available on GitHub:
+
+```
+https://github.com/ricardojjulia/K8-Manifest-OCI
+```
+
+**Option 1: Clone the Repository**
+```bash
+git clone https://github.com/ricardojjulia/K8-Manifest-OCI.git
+cd K8-Manifest-OCI/dynatrace-manifests/staged
+```
+
+**Option 2: Download as ZIP**
+Visit the GitHub repo and click **Code** → **Download ZIP**. Then:
+```bash
+unzip K8-Manifest-OCI-main.zip
+cd K8-Manifest-OCI-main/dynatrace-manifests/staged
+```
+
+**Deployment:**
+
+Once you have the updated package, run the deployment with:
+
+```bash
+./apply-staged.sh --verbose
+```
+
+This will execute all 7 deployment steps with health checks and readiness gates between each step.
+
+**Important Cleanup Step:**
+
+If your team added any temporary or custom `ClusterRole` / `ClusterRoleBinding` workarounds during the previous attempt (around line 687-732 in your working copy), please remove them before re-running:
+
+```bash
+kubectl delete clusterrole <your-temporary-role> --ignore-not-found
+kubectl delete clusterrolebinding <your-temporary-binding> --ignore-not-found
+```
+
+This ensures the new packaged definitions are the single source of truth for RBAC configuration and prevents any drift or conflicts.
+
+**Verification After Deployment:**
+
+Once the script completes, verify all components are healthy:
+
+```bash
+# Check cert-manager pods (should show 3/3 Running)
+kubectl get pods -n cert-manager
+
+# Check Dynatrace operator and webhook
+kubectl get pods -n dynatrace
+
+# Confirm certificate is Ready
+kubectl get certificate dynatrace-webhook -n dynatrace
+
+# Verify DynaKube resource is created
+kubectl get dynakube -n dynatrace
+```
+
+**Documentation:**
+
+The repo includes comprehensive reference docs:
+- **README.md** — Overview, deployment guide, fix history
+- **staged/README-CERT-MANAGER.txt** — Quick reference guide
+- **staged/CERT-MANAGER-SETUP.md** — Detailed troubleshooting and architecture reference
+
+Please let me know if you encounter any issues or need clarification on any of the changes.
+
+Thanks,
+Ricardo
