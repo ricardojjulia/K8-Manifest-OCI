@@ -1,4 +1,4 @@
-# K8-Manifest-OCI
+# K8-Manifest-OCIO
 
 Kubernetes deployment manifests for the **Dynatrace Operator v1.8.1** on an OCI-based cluster, including a fully staged deployment pipeline with automated TLS certificate provisioning via **cert-manager v1.14.0**.
 
