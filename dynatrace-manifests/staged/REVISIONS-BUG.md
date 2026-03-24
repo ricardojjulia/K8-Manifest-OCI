@@ -549,15 +549,87 @@ kubectl logs -n cert-manager -l app.kubernetes.io/component=controller --tail=50
 
 ---
 
+---
+
+## Post-Deployment Issue — RBAC and CA Bundle Reliability (v3 Fix)
+
+**Date:** March 24, 2026
+**Status:** FIXED in v3 ✅
+**Failure Point:** cert-manager webhook pod CrashLoopBackOff due to RBAC conflict; potential CA bundle injection unreliability with flat self-signed cert chain.
+
+### Issue 1: `create` verb with `resourceNames` — RBAC conflict
+
+Kubernetes rejects a Role rule that combines the `create` verb with `resourceNames`. The `cert-manager-webhook:dynamic-serving` Role had a single rule granting `[create, get, list, watch, update, patch, delete]` on `resourceNames: [cert-manager-webhook-ca]`. This is invalid — `create` cannot be scoped to a named resource because the resource doesn't exist yet at creation time.
+
+**Fix:** Split into two rules:
+```yaml
+rules:
+# Named-resource rule: manage the existing CA secret
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames:
+  - cert-manager-webhook-ca
+  verbs: ["get", "list", "watch", "update"]
+# General rule: allow creating any secret (required for first-time CA secret creation)
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["create"]
+```
+
+This aligns with upstream cert-manager v1.14.0 RBAC.
+
+### Issue 2: Flat self-signed cert chain unreliable for CA bundle injection
+
+The original `02-webhook-certificate.yaml` used a `selfSigned` ClusterIssuer to directly issue the webhook serving cert. With a flat self-signed cert, `ca.crt` in the resulting secret may or may not be set correctly depending on the cert-manager version, making `caBundle` injection into webhook configurations fragile.
+
+**Fix:** Switched to a proper CA hierarchy (standard cert-manager pattern):
+```
+selfSigned ClusterIssuer (bootstrap only)
+  → CA Certificate (dynatrace-webhook-ca, isCA: true, 10yr)
+    → CA-backed Issuer (dynatrace-webhook-ca-issuer)
+      → Webhook serving cert (dynatrace-webhook, 90d)
+```
+
+With `isCA: true`, cert-manager guarantees `ca.crt` in the CA secret is the CA cert itself. The webhook serving cert's secret then contains the full chain in `ca.crt`, which cainjector reads when populating `caBundle`.
+
+**Additional fix:** Added explicit `usages` to the webhook cert:
+```yaml
+usages:
+- server auth
+- digital signature
+- key encipherment
+```
+
+### Issue 3: Misleading pod template annotation
+
+The `cert-manager.io/inject-ca-from` annotation on the webhook Deployment's pod template spec was removed. This annotation has no effect on pods — it is only valid on `MutatingWebhookConfiguration` and `ValidatingWebhookConfiguration` resources (where it already existed and was functional). Leaving it on the pod template was misleading.
+
+### Issue 4: Deprecated `--record=true` flag
+
+`kubectl apply --record` was deprecated in Kubernetes 1.22 and removed in 1.28. Removed from `apply-staged.sh`.
+
+### Issue 5: Silent error swallowing in apply script
+
+Non-verbose `kubectl apply` path was redirecting both stdout and stderr to `/dev/null`. With `set -euo pipefail`, the script would exit on error but without any visible message. Fixed so stderr is always visible.
+
+### Files Changed in v3
+
+- `01-cert-manager-install.yaml` — RBAC split for `cert-manager-webhook:dynamic-serving` Role
+- `02-webhook-certificate.yaml` — CA hierarchy, `isCA: true` root CA, explicit `usages` on leaf cert
+- `40-workloads-webhooks.yaml` — Removed no-op `cert-manager.io/inject-ca-from` pod annotation
+- `apply-staged.sh` — Removed `--record=true`; removed `> /dev/null 2>&1`
+
+---
+
 ## Sign-Off
 
-**Issue:** Webhook certificate provisioning failure  
-**Root Cause:** Missing certificate provisioning mechanism (v1); Incomplete cert-manager install — missing cainjector and webhook (v2)  
-**Solution:** cert-manager v1.14.0 with all three components + corrected script wait logic  
-**Status:** ✅ RESOLVED (v2)  
-**Files Modified:** 3  
-**Files Created:** 5  
-**Documentation:** Complete  
+**Issue:** Webhook certificate provisioning failure
+**Root Cause:** Missing certificate provisioning mechanism (v1); Incomplete cert-manager install — missing cainjector and webhook (v2); RBAC conflict + fragile CA chain + stale script flags (v3)
+**Solution:** cert-manager v1.14.0 with all three components + corrected script wait logic + CA hierarchy + RBAC alignment
+**Status:** ✅ RESOLVED (v3)
+**Files Modified (total):** 5
+**Files Created (total):** 5
+**Documentation:** Complete
 
 ---
 
@@ -575,12 +647,13 @@ kubectl logs -n cert-manager -l app.kubernetes.io/component=controller --tail=50
 ## References
 
 - [cert-manager Documentation](https://cert-manager.io)
+- [cert-manager CA Issuer](https://cert-manager.io/docs/configuration/ca/)
 - [Kubernetes Webhook Configuration](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/)
 - [Dynatrace Operator Documentation](https://docs.dynatrace.com/docs/ingest-from/setup-on-k8s)
 - [Self-Signed Certificates with cert-manager](https://cert-manager.io/docs/configuration/selfsigned/)
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** 2026-03-20  
+**Document Version:** 1.1
+**Last Updated:** 2026-03-24
 **Status:** ACTIVE ✅

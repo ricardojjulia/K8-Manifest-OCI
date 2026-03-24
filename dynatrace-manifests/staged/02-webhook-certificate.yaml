@@ -1,17 +1,61 @@
-# Self-Signed Certificate Issuer for Dynatrace Webhook
+# Bootstrap self-signed ClusterIssuer (used only to issue the root CA cert below)
 ---
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
-  name: dynatrace-selfsigned-issuer
+  name: dynatrace-selfsigned-bootstrap
   labels:
     app.kubernetes.io/name: dynatrace-operator
 spec:
   selfSigned: {}
 
 ---
-# Certificate Resource for Dynatrace Webhook
-# This will generate a self-signed certificate that cert-manager automatically injects
+# Root CA certificate — self-signed, marked isCA: true so cert-manager populates ca.crt
+# in the resulting secret. The cainjector reads ca.crt when injecting caBundle into
+# MutatingWebhookConfiguration and ValidatingWebhookConfiguration.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: dynatrace-webhook-ca
+  namespace: dynatrace
+  labels:
+    app.kubernetes.io/name: dynatrace-operator
+    app.kubernetes.io/component: webhook
+spec:
+  secretName: dynatrace-webhook-ca
+  duration: 87600h  # 10 years — CA cert, rotate deliberately
+  renewBefore: 720h # 30 days
+  commonName: "dynatrace-webhook-ca"
+  isCA: true
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  usages:
+  - cert sign
+  - crl sign
+  issuerRef:
+    name: dynatrace-selfsigned-bootstrap
+    kind: ClusterIssuer
+
+---
+# Namespace-scoped Issuer that signs the webhook serving cert using the CA above
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: dynatrace-webhook-ca-issuer
+  namespace: dynatrace
+  labels:
+    app.kubernetes.io/name: dynatrace-operator
+    app.kubernetes.io/component: webhook
+spec:
+  ca:
+    secretName: dynatrace-webhook-ca
+
+---
+# Webhook serving certificate — issued by the CA Issuer above.
+# The resulting secret (dynatrace-webhook-certs) contains tls.crt, tls.key, and ca.crt.
+# cert-manager.io/inject-ca-from on the webhook configs reads ca.crt from this secret
+# and injects it as caBundle so the API server can verify the webhook's TLS cert.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -22,14 +66,21 @@ metadata:
     app.kubernetes.io/component: webhook
 spec:
   secretName: dynatrace-webhook-certs
-  duration: 2160h # 90 days
-  renewBefore: 360h # 15 days
+  duration: 2160h    # 90 days
+  renewBefore: 360h  # 15 days
   commonName: "dynatrace-webhook.dynatrace.svc"
   dnsNames:
   - dynatrace-webhook
   - dynatrace-webhook.dynatrace
   - dynatrace-webhook.dynatrace.svc
   - dynatrace-webhook.dynatrace.svc.cluster.local
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  usages:
+  - server auth
+  - digital signature
+  - key encipherment
   issuerRef:
-    name: dynatrace-selfsigned-issuer
-    kind: ClusterIssuer
+    name: dynatrace-webhook-ca-issuer
+    kind: Issuer

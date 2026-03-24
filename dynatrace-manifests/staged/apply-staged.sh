@@ -170,9 +170,9 @@ apply_manifest() {
     fi
   else
     if [[ "$VERBOSE" == "true" ]]; then
-      kubectl apply -f "$DIR/$manifest_file" --record=true
+      kubectl apply -f "$DIR/$manifest_file"
     else
-      kubectl apply -f "$DIR/$manifest_file" > /dev/null 2>&1
+      kubectl apply -f "$DIR/$manifest_file"
     fi
     log_success "$description applied"
   fi
@@ -298,15 +298,22 @@ main() {
       fi
 
       log_info "Waiting for cert-manager-webhook CA bundle injection..."
+      # Require the caBundle to be a valid base64-encoded PEM block (at least 200 chars).
+      # A simple non-empty check can pass on stale data from a prior deployment before
+      # cainjector has replaced it with the new CA cert, causing x509 errors downstream.
+      CA_BUNDLE_OK=false
       for _ in $(seq 1 60); do
-        if kubectl get validatingwebhookconfiguration cert-manager-webhook -o jsonpath='{.webhooks[0].clientConfig.caBundle}' 2>/dev/null | grep -q '[A-Za-z0-9+/=]'; then
+        CA_BUNDLE=$(kubectl get validatingwebhookconfiguration cert-manager-webhook \
+          -o jsonpath='{.webhooks[0].clientConfig.caBundle}' 2>/dev/null || true)
+        if [[ ${#CA_BUNDLE} -ge 200 ]]; then
           log_success "cert-manager-webhook CA bundle injected"
+          CA_BUNDLE_OK=true
           break
         fi
         sleep 2
       done
-      if ! kubectl get validatingwebhookconfiguration cert-manager-webhook -o jsonpath='{.webhooks[0].clientConfig.caBundle}' 2>/dev/null | grep -q '[A-Za-z0-9+/=]'; then
-        log_error "cert-manager-webhook CA bundle is still empty"
+      if [[ "$CA_BUNDLE_OK" != "true" ]]; then
+        log_error "cert-manager-webhook CA bundle is still empty or invalid"
         log_error "Run: kubectl describe validatingwebhookconfiguration cert-manager-webhook"
         log_error "Run: kubectl logs -n cert-manager deploy/cert-manager-cainjector"
         exit 1
