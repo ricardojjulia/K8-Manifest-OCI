@@ -623,9 +623,12 @@ metadata:
 rules:
 - apiGroups: [""]
   resources: ["secrets"]
+  verbs: ["create"]
+- apiGroups: [""]
+  resources: ["secrets"]
   resourceNames:
   - cert-manager-webhook-ca
-  verbs: ["get", "list", "watch", "create", "update", "delete"]
+  verbs: ["get", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -760,8 +763,8 @@ metadata:
     app.kubernetes.io/instance: cert-manager
     app.kubernetes.io/component: webhook
   annotations:
-    # cert-manager's cainjector will inject the CA bundle from this secret
-    cert-manager.io/inject-apiserver-ca: "true"
+    # Inject CA from webhook secret so API server trusts cert-manager-webhook serving certs.
+    cert-manager.io/inject-ca-from-secret: cert-manager/cert-manager-webhook-ca
 webhooks:
 - name: webhook.cert-manager.io
   namespaceSelector:

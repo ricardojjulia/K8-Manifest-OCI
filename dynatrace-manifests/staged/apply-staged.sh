@@ -296,6 +296,21 @@ main() {
         log_warning "cert-manager-webhook service has no endpoints yet"
         log_warning "Check: kubectl get pods -n cert-manager && kubectl describe pod -n cert-manager -l app.kubernetes.io/component=webhook"
       fi
+
+      log_info "Waiting for cert-manager-webhook CA bundle injection..."
+      for _ in $(seq 1 60); do
+        if kubectl get validatingwebhookconfiguration cert-manager-webhook -o jsonpath='{.webhooks[0].clientConfig.caBundle}' 2>/dev/null | grep -q '[A-Za-z0-9+/=]'; then
+          log_success "cert-manager-webhook CA bundle injected"
+          break
+        fi
+        sleep 2
+      done
+      if ! kubectl get validatingwebhookconfiguration cert-manager-webhook -o jsonpath='{.webhooks[0].clientConfig.caBundle}' 2>/dev/null | grep -q '[A-Za-z0-9+/=]'; then
+        log_error "cert-manager-webhook CA bundle is still empty"
+        log_error "Run: kubectl describe validatingwebhookconfiguration cert-manager-webhook"
+        log_error "Run: kubectl logs -n cert-manager deploy/cert-manager-cainjector"
+        exit 1
+      fi
     fi
     echo ""
   else
