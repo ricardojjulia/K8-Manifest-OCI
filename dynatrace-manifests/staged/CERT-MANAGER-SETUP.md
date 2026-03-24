@@ -1,9 +1,11 @@
 # Dynatrace Operator Webhook Certificate Fix - Implementation Guide
 
 ## Problem Summary
+
 The webhook pods were failing to start because they were waiting indefinitely for certificates that were never provisioned. This prevented the webhook endpoint from becoming available, which blocked the K8s API server from routing admission webhook requests to it, ultimately preventing DynaKube resource creation.
 
 ## Solution: cert-manager Integration
+
 Implemented automated certificate lifecycle management using cert-manager v1.14.0 with self-signed certificates. cert-manager automatically generates, injects, and renews TLS certificates for the webhook.
 
 ## Changes Made
@@ -11,17 +13,20 @@ Implemented automated certificate lifecycle management using cert-manager v1.14.
 ### 1. **New Files Created**
 
 #### `01-cert-manager-install.yaml`
+
 - Installs cert-manager v1.14.0 components
 - Includes: Namespace, CRDs, RBAC, Controller Deployment
 - Minimal configuration suitable for production
 
 #### `02-webhook-certificate.yaml`
+
 - Creates `ClusterIssuer` for self-signed certificates
 - Creates `Certificate` resource that generates TLS keypair
 - cert-manager automatically creates secret: `dynatrace-webhook-certs`
 - Certificate valid for 90 days, renews 15 days before expiry
 
 #### `apply-staged-with-cert-manager.sh`
+
 - Complete deployment automation script
 - Applies manifests in correct order
 - Includes health checks and waits between steps
@@ -30,9 +35,11 @@ Implemented automated certificate lifecycle management using cert-manager v1.14.
 ### 2. **Modified Files**
 
 #### `40-workloads-webhooks.yaml`
+
 Three critical changes:
 
 **A. Pod Template Annotation**
+
 ```yaml
 annotations:
   dynatrace.com/inject: "false"
@@ -41,6 +48,7 @@ annotations:
 ```
 
 **B. Certificate Volume Mount** (lines ~280-284)
+
 ```yaml
 # OLD: emptyDir volume waiting for certs that never came
 volumes:
@@ -57,6 +65,7 @@ volumes:
 ```
 
 **C. Webhook Configuration CA Bundle**
+
 ```yaml
 # MutatingWebhookConfiguration metadata
 annotations:
@@ -66,11 +75,13 @@ annotations:
 annotations:
   cert-manager.io/inject-ca-from: dynatrace/dynatrace-webhook  # NEW
 ```
+
 These annotations instruct cert-manager to inject the CA certificate bundle into the `caBundle` field automatically.
 
 ## Deployment Instructions
 
 ### Step 1: Clean Up Previous Failed Deployment
+
 ```bash
 # Remove the failed DynaKube that couldn't be created
 kubectl delete -f 50-dynakube-oci.yaml 2>/dev/null || true
@@ -80,12 +91,14 @@ kubectl delete pods -n dynatrace -l app.kubernetes.io/component=webhook --ignore
 ```
 
 ### Step 2: Verify Staged Directory
+
 ```bash
 cd dynatrace-manifests/staged/
 ls -la
 ```
 
 Expected files:
+
 ```
 00-namespace.yaml
 01-cert-manager-install.yaml             ← NEW
@@ -99,6 +112,7 @@ apply-staged-with-cert-manager.sh        ← NEW
 ```
 
 ### Step 3: Execute Deployment
+
 ```bash
 # Full automated deployment (RECOMMENDED)
 ./apply-staged-with-cert-manager.sh
@@ -123,6 +137,7 @@ kubectl apply -f 50-dynakube-oci.yaml
 ## Verification Steps
 
 ### 1. Check cert-manager Installation
+
 ```bash
 # cert-manager pod should be running
 kubectl get pods -n cert-manager
@@ -134,6 +149,7 @@ kubectl get crd | grep cert-manager
 ```
 
 ### 2. Verify Certificate Generation
+
 ```bash
 # Check if Certificate resource was created
 kubectl get certificate -n dynatrace
@@ -149,6 +165,7 @@ kubectl describe secret dynatrace-webhook-certs -n dynatrace
 ```
 
 ### 3. Verify Webhook Pod Health
+
 ```bash
 # Check webhook pods are running
 kubectl get pods -n dynatrace -l app.kubernetes.io/component=webhook
@@ -168,6 +185,7 @@ kubectl get endpoints dynatrace-webhook -n dynatrace
 ```
 
 ### 4. Verify DynaKube Creation
+
 ```bash
 # Check if DynaKube resource was created successfully
 kubectl get dynakubes -n dynatrace
@@ -182,6 +200,7 @@ kubectl get events -n dynatrace --sort-by='.lastTimestamp' | tail -20
 ```
 
 ### 5. Quick Diagnostic One-Liner
+
 ```bash
 # Check all Dynatrace components
 echo "=== Cert-Manager ===" && kubectl get pods -n cert-manager && \
@@ -195,6 +214,7 @@ echo -e "\n=== DynaKube ===" && kubectl get dynakubes -n dynatrace
 ## Troubleshooting
 
 ### Issue: Certificate not generating
+
 ```bash
 # Check cert-manager logs
 kubectl logs -n cert-manager -l app.kubernetes.io/name=cert-manager
@@ -208,6 +228,7 @@ kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=cert-manager -n
 ```
 
 ### Issue: Webhook pods still not ready
+
 ```bash
 # Check for certificate volume issues
 kubectl describe pod -n dynatrace -l app.kubernetes.io/component=webhook | grep -A 5 "Volumes"
@@ -220,6 +241,7 @@ kubectl describe pod -n dynatrace -l app.kubernetes.io/component=webhook | grep 
 ```
 
 ### Issue: Service has no endpoints
+
 ```bash
 # Check if pods have matching selector labels
 kubectl get pods -n dynatrace -l app.kubernetes.io/name=dynatrace-operator,app.kubernetes.io/component=webhook -o wide
@@ -318,6 +340,7 @@ kubectl get events -n dynatrace --sort-by='.lastTimestamp' | grep -i cert
 ## Summary
 
 You have successfully implemented:
+
 1. **cert-manager v1.14.0** for certificate lifecycle management
 2. **Self-signed ClusterIssuer** for generating TLS certificates
 3. **Certificate resource** for webhook TLS keypair
