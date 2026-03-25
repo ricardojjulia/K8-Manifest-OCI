@@ -1,0 +1,34 @@
+Helm Values Report
+==================
+
+DynaKube source : /Users/Ricardo.Julia/K8-Manifest-OCI/dynakube_OCI.yaml
+Selected profile: dynakube-driven
+
+Detected features
+-----------------
+  logMonitoring   : enabled
+  activeGate      : enabled
+  oneAgent modes  : classicFullStack
+  activeGate caps : dynatrace-api, kubernetes-monitoring, routing
+
+Generated Helm values
+---------------------
+  10-operator-values.yaml:
+    operator.enabled          : true
+    webhook.enabled           : true
+    installCRDs               : true
+    csidriver.enabled         : false
+    operator.image.repository : public.ecr.aws/dynatrace/dynatrace-operator
+    operator.image.tag        : v1.4.0
+
+Unmapped features: (none)
+
+Generated files
+---------------
+  staged/00-cert-manager-values.yaml
+  staged/10-operator-values.yaml
+  staged/20-dynakube-cr.yaml
+  staged/install.sh
+  staged/uninstall.sh
+  staged/helm-values-report.txt
+  staged/helm-values-report.json
