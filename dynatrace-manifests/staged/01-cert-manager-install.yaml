@@ -287,9 +287,13 @@ rules:
   - cert-manager.io
   resources:
   - certificates
+  - certificates/status
   - certificaterequests
+  - certificaterequests/status
   - issuers
+  - issuers/status
   - clusterissuers
+  - clusterissuers/status
   verbs:
   - create
   - delete
