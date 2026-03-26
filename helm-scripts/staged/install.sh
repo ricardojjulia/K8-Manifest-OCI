@@ -59,6 +59,11 @@ if [[ "$SKIP_CERT_MANAGER" == "false" ]]; then
       -l app.kubernetes.io/name=cert-manager \
       -n cert-manager --timeout=300s
 
+    echo "  Waiting for cert-manager cainjector pod..."
+    kubectl wait --for=condition=Ready pod \
+      -l app.kubernetes.io/name=cainjector \
+      -n cert-manager --timeout=300s
+
     echo "  Waiting for cert-manager webhook pod..."
     kubectl wait --for=condition=Ready pod \
       -l app.kubernetes.io/name=webhook \
@@ -77,9 +82,8 @@ if [[ "$SKIP_CERT_MANAGER" == "false" ]]; then
         break
       fi
       if [[ $(date +%s) -ge $DEADLINE ]]; then
-        echo "  ${YELLOW}WARNING: cert-manager-webhook endpoint not ready after 120s.${NC}"
-        echo "  Continuing — apply may fail if the CA bundle is not yet injected."
-        break
+        echo -e "  ${YELLOW}ERROR: cert-manager-webhook endpoint not ready after 120s.${NC}" >&2
+        exit 1
       fi
       sleep 5
     done

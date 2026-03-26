@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 echo "=========================================="
 echo "Deploying Dynatrace Operator with cert-manager"
@@ -8,6 +8,7 @@ echo "=========================================="
 # Colors for output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Step 1: Apply namespace
@@ -20,9 +21,35 @@ echo -e "${BLUE}[2/6]${NC} Installing cert-manager..."
 kubectl apply -f 01-cert-manager-install.yaml
 echo -e "${GREEN}✓ Cert-manager installing (wait for controller pod to be ready)${NC}"
 
-# Wait for cert-manager to be ready
+# Wait for all three cert-manager pods to be ready
 echo "Waiting for cert-manager controller to be ready..."
-kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=cert-manager -n cert-manager --timeout=300s || true
+kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=cert-manager -n cert-manager --timeout=300s
+
+echo "Waiting for cert-manager cainjector to be ready..."
+kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=cainjector -n cert-manager --timeout=300s
+
+echo "Waiting for cert-manager webhook to be ready..."
+kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=webhook -n cert-manager --timeout=300s
+
+# Poll until cert-manager-webhook Service has a live endpoint (max 120s).
+# This gate prevents the CA injection race: the webhook endpoint must be
+# reachable before cert-manager can validate and issue Certificate resources.
+echo "Polling cert-manager-webhook endpoint availability (max 120s)..."
+DEADLINE=$(( $(date +%s) + 120 ))
+while true; do
+  EP=$(kubectl get endpoints cert-manager-webhook \
+         -n cert-manager \
+         -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null || true)
+  if [[ -n "$EP" ]]; then
+    echo -e "  ${GREEN}cert-manager-webhook endpoint ready: $EP${NC}"
+    break
+  fi
+  if [[ $(date +%s) -ge $DEADLINE ]]; then
+    echo -e "  ${YELLOW}WARNING: cert-manager-webhook endpoint not ready after 120s.${NC}" >&2
+    exit 1
+  fi
+  sleep 5
+done
 
 # Step 3: Apply CRDs
 echo -e "${BLUE}[3/6]${NC} Applying CRDs..."
@@ -40,8 +67,26 @@ kubectl apply -f 30-config-services.yaml
 kubectl apply -f 02-webhook-certificate.yaml
 echo -e "${GREEN}✓ Webhook certificate created${NC}"
 
-echo "Waiting for certificate to be issued..."
-kubectl wait --for=condition=Ready certificate/dynatrace-webhook -n dynatrace --timeout=120s || true
+# Wait for the CA certificate first — dynatrace-webhook depends on it.
+# If dynatrace-webhook-ca does not exist (old version), skip this gate.
+echo "Waiting for CA certificate to be issued (dynatrace-webhook-ca)..."
+if kubectl get certificate dynatrace-webhook-ca -n dynatrace &>/dev/null; then
+  kubectl wait --for=condition=Ready certificate/dynatrace-webhook-ca -n dynatrace --timeout=120s
+else
+  echo "  dynatrace-webhook-ca not found — assuming single-cert setup, skipping CA wait."
+fi
+
+echo "Waiting for webhook serving certificate to be issued (dynatrace-webhook)..."
+kubectl wait --for=condition=Ready certificate/dynatrace-webhook -n dynatrace --timeout=120s
+
+# Hard gate: the secret must exist before workloads can mount it.
+echo "Verifying dynatrace-webhook-certs secret exists..."
+if ! kubectl get secret dynatrace-webhook-certs -n dynatrace &>/dev/null; then
+  echo "ERROR: secret 'dynatrace-webhook-certs' not found in namespace 'dynatrace'." >&2
+  echo "       The certificate was not issued. Check: kubectl describe certificate dynatrace-webhook -n dynatrace" >&2
+  exit 1
+fi
+echo -e "  ${GREEN}dynatrace-webhook-certs secret present${NC}"
 
 echo -e "${BLUE}[6/6]${NC} Deploying webhook and operator..."
 kubectl apply -f 40-workloads-webhooks.yaml
@@ -49,7 +94,7 @@ echo -e "${GREEN}✓ Workloads deployed${NC}"
 
 # Wait for webhook to be ready
 echo "Waiting for webhook pods to be ready..."
-kubectl wait --for=condition=Ready pod -l app.kubernetes.io/component=webhook -n dynatrace --timeout=300s || true
+kubectl wait --for=condition=Ready pod -l app.kubernetes.io/component=webhook -n dynatrace --timeout=300s
 
 # Step 6: Apply DynaKube
 echo -e "${BLUE}[7/7]${NC} Applying DynaKube configuration..."
