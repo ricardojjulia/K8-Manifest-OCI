@@ -87,6 +87,14 @@ if [[ "$SKIP_CERT_MANAGER" == "false" ]]; then
       fi
       sleep 5
     done
+
+    # Restart the cert-manager controller so its informer does a fresh List
+    # against the API server after all resources are in place. Prevents the
+    # lister-cache "not found" race seen on clusters where the controller
+    # started on an empty cert-manager CRD list.
+    echo "  Restarting cert-manager controller to sync informer cache..."
+    kubectl rollout restart deployment/cert-manager -n cert-manager
+    kubectl rollout status deployment/cert-manager -n cert-manager --timeout=60s
   fi
   echo -e "${GREEN}✓ cert-manager installed${NC}"
 else
@@ -118,6 +126,28 @@ fi
 echo -e "${GREEN}✓ dynatrace-operator installed${NC}"
 
 # ── Step 3/3: DynaKube CR ─────────────────────────────────────────────
+# Wait for cainjector to populate the DynaKube CRD conversion webhook caBundle.
+# Without this, applying the DynaKube CR fails with x509: certificate signed by
+# unknown authority because the API server cannot verify the conversion webhook.
+if [[ "$DRY_RUN" == "false" ]]; then
+  echo "  Waiting for cainjector to inject caBundle into DynaKube CRD (max 60s)..."
+  DEADLINE=$(( $(date +%s) + 60 ))
+  while true; do
+    CABUNDLE=$(kubectl get crd dynakubes.dynatrace.com \
+      -o jsonpath='{.spec.conversion.webhook.clientConfig.caBundle}' 2>/dev/null || true)
+    if [[ -n "$CABUNDLE" ]]; then
+      echo -e "  ${GREEN}caBundle injected into DynaKube CRD${NC}"
+      break
+    fi
+    if [[ $(date +%s) -ge $DEADLINE ]]; then
+      echo "ERROR: caBundle not injected into DynaKube CRD after 60s." >&2
+      echo "       Check: kubectl describe crd dynakubes.dynatrace.com" >&2
+      exit 1
+    fi
+    sleep 3
+  done
+fi
+
 # The DynaKube CR is applied via kubectl — it is not managed by Helm.
 # This is intentional: the CR is authored in dynakube_OCI.yaml and
 # extracted verbatim; there is no benefit to wrapping it in Helm.
