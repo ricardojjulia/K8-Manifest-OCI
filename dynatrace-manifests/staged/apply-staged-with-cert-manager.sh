@@ -104,6 +104,26 @@ echo -e "${GREEN}✓ Workloads deployed${NC}"
 echo "Waiting for webhook pods to be ready..."
 kubectl wait --for=condition=Ready pod -l app.kubernetes.io/component=webhook -n dynatrace --timeout=300s
 
+# Wait for cainjector to populate the DynaKube CRD conversion webhook caBundle.
+# Without this, applying the DynaKube CR fails with x509: certificate signed by
+# unknown authority because the API server cannot verify the conversion webhook.
+echo "Waiting for cainjector to inject caBundle into DynaKube CRD (max 60s)..."
+DEADLINE=$(( $(date +%s) + 60 ))
+while true; do
+  CABUNDLE=$(kubectl get crd dynakubes.dynatrace.com \
+    -o jsonpath='{.spec.conversion.webhook.clientConfig.caBundle}' 2>/dev/null || true)
+  if [[ -n "$CABUNDLE" ]]; then
+    echo -e "  ${GREEN}caBundle injected into DynaKube CRD${NC}"
+    break
+  fi
+  if [[ $(date +%s) -ge $DEADLINE ]]; then
+    echo "ERROR: caBundle not injected into DynaKube CRD after 60s." >&2
+    echo "       Check: kubectl describe crd dynakubes.dynatrace.com" >&2
+    exit 1
+  fi
+  sleep 3
+done
+
 # Step 6: Apply DynaKube
 echo -e "${BLUE}[7/7]${NC} Applying DynaKube configuration..."
 kubectl apply -f 50-dynakube-oci.yaml
