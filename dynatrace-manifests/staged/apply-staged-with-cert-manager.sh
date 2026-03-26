@@ -67,6 +67,14 @@ kubectl apply -f 30-config-services.yaml
 kubectl apply -f 02-webhook-certificate.yaml
 echo -e "${GREEN}✓ Webhook certificate created${NC}"
 
+# Restart the cert-manager controller so its informer does a fresh List
+# against the API server, which now includes the certificates we just created.
+# Without this, the controller's lister cache (populated at startup on an
+# empty cluster) never reflects the newly created Certificate objects.
+echo "Restarting cert-manager controller to sync informer cache..."
+kubectl rollout restart deployment/cert-manager -n cert-manager
+kubectl rollout status deployment/cert-manager -n cert-manager --timeout=60s
+
 # Wait for the CA certificate first — dynatrace-webhook depends on it.
 # If dynatrace-webhook-ca does not exist (old version), skip this gate.
 echo "Waiting for CA certificate to be issued (dynatrace-webhook-ca)..."
