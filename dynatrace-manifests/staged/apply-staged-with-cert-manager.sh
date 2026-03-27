@@ -130,17 +130,21 @@ kubectl wait --for=condition=Ready pod -l app.kubernetes.io/component=webhook -n
 # Wait for cainjector to populate the DynaKube CRD conversion webhook caBundle.
 # Without this, applying the DynaKube CR fails with x509: certificate signed by
 # unknown authority because the API server cannot verify the conversion webhook.
-echo "Waiting for cainjector to inject caBundle into DynaKube CRD (max 60s)..."
-DEADLINE=$(( $(date +%s) + 60 ))
+echo "Waiting for cainjector to inject caBundle into DynaKube and EdgeConnect CRDs (max 120s)..."
+DEADLINE=$(( $(date +%s) + 120 ))
 while true; do
-  CABUNDLE=$(kubectl get crd dynakubes.dynatrace.com \
+  DK_BUNDLE=$(kubectl get crd dynakubes.dynatrace.com \
     -o jsonpath='{.spec.conversion.webhook.clientConfig.caBundle}' 2>/dev/null || true)
-  if [[ -n "$CABUNDLE" ]]; then
-    echo -e "  ${GREEN}caBundle injected into DynaKube CRD${NC}"
+  EC_BUNDLE=$(kubectl get crd edgeconnects.dynatrace.com \
+    -o jsonpath='{.spec.conversion.webhook.clientConfig.caBundle}' 2>/dev/null || true)
+  if [[ -n "$DK_BUNDLE" && -n "$EC_BUNDLE" ]]; then
+    echo -e "  ${GREEN}caBundle injected into DynaKube and EdgeConnect CRDs${NC}"
     break
   fi
   if [[ $(date +%s) -ge $DEADLINE ]]; then
-    echo "ERROR: caBundle not injected into DynaKube CRD after 60s." >&2
+    echo "ERROR: caBundle not injected into CRDs after 120s." >&2
+    echo "       DynaKube: $([ -n "$DK_BUNDLE" ] && echo injected || echo missing)" >&2
+    echo "       EdgeConnect: $([ -n "$EC_BUNDLE" ] && echo injected || echo missing)" >&2
     echo "       Check: kubectl describe crd dynakubes.dynatrace.com" >&2
     exit 1
   fi
