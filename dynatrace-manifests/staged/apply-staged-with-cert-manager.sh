@@ -51,27 +51,12 @@ while true; do
   sleep 5
 done
 
-# Step 3: Apply CRDs
-echo -e "${BLUE}[3/6]${NC} Applying CRDs..."
-kubectl apply -f 10-crds.yaml
-echo -e "${GREEN}✓ CRDs applied${NC}"
-
-# Step 4: Apply RBAC
-echo -e "${BLUE}[4/6]${NC} Applying RBAC..."
-kubectl apply -f 20-rbac.yaml
-echo -e "${GREEN}✓ RBAC applied${NC}"
-
-# Step 5: Apply services, webhook certificate, and workloads
-echo -e "${BLUE}[5/6]${NC} Applying webhook certificate configuration..."
-kubectl apply -f 30-config-services.yaml
-kubectl apply -f 02-webhook-certificate.yaml
-echo -e "${GREEN}✓ Webhook certificate created${NC}"
-
 # Poll until cert-manager cainjector has injected its own caBundle into the
 # cert-manager ValidatingWebhookConfiguration. Without this gate, applying
 # cert-manager Certificate/Issuer resources fails with:
 #   x509: certificate signed by unknown authority
 # because the API server cannot verify the cert-manager webhook's TLS cert.
+# This must run BEFORE any cert-manager resources (Certificates, Issuers) are applied.
 echo "Waiting for cainjector to inject caBundle into cert-manager webhook (max 120s)..."
 DEADLINE=$(( $(date +%s) + 120 ))
 while true; do
@@ -88,6 +73,22 @@ while true; do
   fi
   sleep 3
 done
+
+# Step 3: Apply CRDs
+echo -e "${BLUE}[3/6]${NC} Applying CRDs..."
+kubectl apply -f 10-crds.yaml
+echo -e "${GREEN}✓ CRDs applied${NC}"
+
+# Step 4: Apply RBAC
+echo -e "${BLUE}[4/6]${NC} Applying RBAC..."
+kubectl apply -f 20-rbac.yaml
+echo -e "${GREEN}✓ RBAC applied${NC}"
+
+# Step 5: Apply services, webhook certificate, and workloads
+echo -e "${BLUE}[5/6]${NC} Applying webhook certificate configuration..."
+kubectl apply -f 30-config-services.yaml
+kubectl apply -f 02-webhook-certificate.yaml
+echo -e "${GREEN}✓ Webhook certificate created${NC}"
 
 # Restart the cert-manager controller so its informer does a fresh List
 # against the API server, which now includes the certificates we just created.
