@@ -67,6 +67,28 @@ kubectl apply -f 30-config-services.yaml
 kubectl apply -f 02-webhook-certificate.yaml
 echo -e "${GREEN}✓ Webhook certificate created${NC}"
 
+# Poll until cert-manager cainjector has injected its own caBundle into the
+# cert-manager ValidatingWebhookConfiguration. Without this gate, applying
+# cert-manager Certificate/Issuer resources fails with:
+#   x509: certificate signed by unknown authority
+# because the API server cannot verify the cert-manager webhook's TLS cert.
+echo "Waiting for cainjector to inject caBundle into cert-manager webhook (max 120s)..."
+DEADLINE=$(( $(date +%s) + 120 ))
+while true; do
+  CABUNDLE=$(kubectl get validatingwebhookconfiguration cert-manager-webhook \
+    -o jsonpath='{.webhooks[0].clientConfig.caBundle}' 2>/dev/null || true)
+  if [[ -n "$CABUNDLE" ]]; then
+    echo -e "  ${GREEN}cert-manager webhook caBundle injected${NC}"
+    break
+  fi
+  if [[ $(date +%s) -ge $DEADLINE ]]; then
+    echo "ERROR: cert-manager webhook caBundle not injected after 120s." >&2
+    echo "       Check: kubectl describe validatingwebhookconfiguration cert-manager-webhook" >&2
+    exit 1
+  fi
+  sleep 3
+done
+
 # Restart the cert-manager controller so its informer does a fresh List
 # against the API server, which now includes the certificates we just created.
 # Without this, the controller's lister cache (populated at startup on an
