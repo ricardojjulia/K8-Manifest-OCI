@@ -10,7 +10,7 @@ Available in two parallel implementations: raw `kubectl` manifests and a Helm-ba
 
 ## Repository Structure
 
-```
+```text
 K8-Manifest-OCI/
 ├── dynakube_OCI.yaml                          # Source DynaKube CR + image pull secret
 │
@@ -50,10 +50,11 @@ K8-Manifest-OCI/
 - `kubectl` v1.21+ configured against the target cluster
 - Cluster-admin permissions (CRDs and RBAC require elevated access)
 - **Helm pipeline only:** `helm` v3.10+ installed
+
   ```bash
-  # Install Helm if not present
   curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
   ```
+
 - Image pull secret for `public.ecr.aws/dynatrace/` (embedded in `50-dynakube-oci.yaml` / `20-dynakube-cr.yaml`)
 
 ---
@@ -71,7 +72,7 @@ chmod +x install.sh
 **What it does (3 steps):**
 
 | Step | Action | Gates |
-|------|--------|-------|
+| --- | --- | --- |
 | 1 | Install cert-manager v1.14.5 via Helm | 3-pod waits → endpoint poll (120s) → caBundle injection into cert-manager webhook → controller restart |
 | 2 | Install dynatrace-operator v1.8.1 via Helm (`installCRDs: true`) | operator + webhook pod waits |
 | 3 | Apply DynaKube CR via kubectl | caBundle injected into DynaKube + EdgeConnect CRDs (120s) → apply |
@@ -79,7 +80,7 @@ chmod +x install.sh
 **Flags:**
 
 | Flag | Description |
-|------|-------------|
+| --- | --- |
 | `--dry-run` | Preview all Helm and kubectl commands without applying |
 | `--skip-cert-manager` | Skip cert-manager install (if already present) |
 | `--skip-wait` | Skip readiness wait loops |
@@ -105,7 +106,7 @@ chmod +x apply-staged-with-cert-manager.sh
 **What it does (7 steps):**
 
 | Step | File(s) | Gates |
-|------|---------|-------|
+| --- | --- | --- |
 | 1 | `00-namespace.yaml` | — |
 | 2 | `01-cert-manager-install.yaml` | 3-pod waits → endpoint poll (120s) → caBundle injection into cert-manager webhook (120s) → controller restart |
 | 3 | `10-crds.yaml` | — |
@@ -129,12 +130,14 @@ kubectl delete namespace cert-manager --ignore-not-found=true
 If a previous attempt left partial state, clean up before re-running.
 
 **Helm pipeline:**
+
 ```bash
 cd helm-scripts/staged/
 ./uninstall.sh --purge-namespaces
 ```
 
 **Raw manifest pipeline:**
+
 ```bash
 cd dynatrace-manifests/staged/
 ./rollback-staged.sh
@@ -143,6 +146,7 @@ kubectl delete namespace cert-manager --ignore-not-found=true
 ```
 
 Wait ~60 seconds for namespace termination, then verify clean before re-running:
+
 ```bash
 kubectl get ns | grep -E 'dynatrace|cert-manager'
 kubectl get crd | grep -E 'dynatrace|cert-manager'
@@ -169,6 +173,7 @@ kubectl get dynakubes -n dynatrace
 ```
 
 **Expected state after successful deployment:**
+
 - `cert-manager`, `cert-manager-cainjector`, `cert-manager-webhook` → `Running`
 - `dynatrace-operator` → `Running 1/1`
 - `dynatrace-webhook` (×2) → `Running/Ready`
@@ -178,7 +183,7 @@ kubectl get dynakubes -n dynatrace
 - `secret/dynatrace-webhook-certs` → present
 - `dynakube/<name>` → `Deploying` → `Running`
 
-> **Note:** In isolated test environments (no connectivity to `fzj25496.live.dynatrace.com`), the ActiveGate pod will remain `Pending` or `CrashLoopBackOff`. This is expected — on a connected EKS cluster with a valid API token the ActiveGate will start normally.
+> **Note:** In isolated test environments without connectivity to the Dynatrace tenant, the ActiveGate pod will remain `Pending` or `CrashLoopBackOff`. This is expected — on a connected cluster with a valid API token the ActiveGate will start normally.
 
 ---
 
@@ -198,17 +203,20 @@ The upstream Dynatrace Operator bundle ships with a webhook deployment that moun
 ## Fix History
 
 ### v1 — Initial cert-manager Integration
+
 - Added `01-cert-manager-install.yaml` (controller only, hand-crafted minimal manifest)
 - Created `02-webhook-certificate.yaml` (selfSigned ClusterIssuer + Certificate)
 - Modified `40-workloads-webhooks.yaml`: replaced `emptyDir` with secret volume mount, added CA injection annotations
 - Enhanced `apply-staged.sh` with cert-manager steps and runtime flags
 
 ### v2 — Complete cert-manager Component Set
+
 - **Root cause:** Only the controller was deployed; `cert-manager-cainjector` and `cert-manager-webhook` were missing
 - Added cainjector and cert-manager webhook components to `01-cert-manager-install.yaml`
 - Fixed certificate readiness wait in deploy script (label selector bug → resource name)
 
 ### v3 — ACME CRDs, RBAC Completion, Endpoint Gate
+
 - **Root cause:** Three separate failures:
   1. Controller forbidden on `orders.acme.cert-manager.io` and `challenges.acme.cert-manager.io` — ACME CRDs missing
   2. Controller forbidden on `services` and `ingresses.networking.k8s.io` — RBAC gaps
@@ -217,11 +225,13 @@ The upstream Dynatrace Operator bundle ships with a webhook deployment that moun
 - Added endpoint polling gate (120s) in deploy script before certificate creation
 
 ### v4 — cert-manager Manifest Replaced with Official Release
-- **Root cause:** The hand-crafted `01-cert-manager-install.yaml` was missing RBAC permissions for `/status` subresources (`certificates/status`, `issuers/status`, `clusterissuers/status`) and for `pods` and `configmaps` required by the controller's informer cache. This caused a v1.14.0 lister-cache bug: the controller started on an empty cluster, its List+Watch cache was populated with nothing, and newly created Certificate objects were never reflected — certificates were never issued.
-- **Fix:** Replaced the entire hand-crafted `01-cert-manager-install.yaml` (547 lines) with the official cert-manager v1.14.5 release manifest (5580+ lines). All RBAC, CRDs, and components are now authoritative.
+
+- **Root cause:** The hand-crafted `01-cert-manager-install.yaml` was missing RBAC permissions for `/status` subresources (`certificates/status`, `issuers/status`, `clusterissuers/status`) and for `pods` and `configmaps` required by the controller's informer cache. This caused a lister-cache bug: the controller started on an empty cluster, its List+Watch cache was populated with nothing, and newly created Certificate objects were never reflected — certificates were never issued.
+- **Fix:** Replaced the entire hand-crafted manifest (547 lines) with the official cert-manager v1.14.5 release manifest (5580+ lines). All RBAC, CRDs, and components are now authoritative.
 - Added cert-manager controller restart (`kubectl rollout restart`) after the endpoint gate as a precautionary informer cache sync.
 
 ### v5 — Proper CA Chain in webhook-certificate.yaml
+
 - **Root cause:** The 2-resource setup (selfSigned ClusterIssuer + serving Certificate) did not produce a proper CA bundle that cainjector could inject into webhook configurations.
 - **Fix:** Rebuilt `02-webhook-certificate.yaml` as a 4-resource CA chain:
   1. `ClusterIssuer/dynatrace-selfsigned-bootstrap` — bootstrap selfSigned issuer
@@ -231,12 +241,14 @@ The upstream Dynatrace Operator bundle ships with a webhook deployment that moun
 - Updated deploy script to wait for CA cert, then serving cert, then verify secret exists before continuing.
 
 ### v6 — caBundle Injection Gate for DynaKube CRD
+
 - **Root cause:** Applying the DynaKube CR failed with `x509: certificate signed by unknown authority`. The DynaKube CRD conversion webhook `caBundle` field was empty — cainjector had no annotation telling it which certificate to inject.
 - **Fixes:**
   - Added `cert-manager.io/inject-ca-from: dynatrace/dynatrace-webhook` annotation to DynaKube CRD in `10-crds.yaml`
   - Added caBundle polling gate before DynaKube CR apply
 
 ### v7 — Helm Pipeline Added
+
 - **New:** Parallel Helm-based implementation in `helm-scripts/` with full gate parity to the raw manifest pipeline
 - `generate_helm.py` — standalone generator reading `dynakube_OCI.yaml` and writing all staged files
 - `staged/install.sh` — endpoint poll, controller restart, caBundle gate
@@ -244,28 +256,29 @@ The upstream Dynatrace Operator bundle ships with a webhook deployment that moun
 - End-to-end deployment verified on k3s/Multipass
 
 ### v8 — EdgeConnect CRD, cert-manager caBundle Gate, Helm Parity (DeploymentReady v2)
-- **Root cause 1 — Operator CrashLoopBackOff:** Operator v1.8.1 requires the `edgeconnects.dynatrace.com` CRD with version `v1alpha2`. This CRD was present in the operator bundle but not included in `10-crds.yaml` by the original `split_manifests.py` run. Without it, the operator crashed immediately on startup with `no matches for kind "EdgeConnect" in version "dynatrace.com/v1alpha2"`.
-  - **Fix:** Extracted `edgeconnects.dynatrace.com` CRD from the bundle and appended it to `10-crds.yaml`.
 
-- **Root cause 2 — Silent DynaKube CRD overwrite:** After appending the EdgeConnect CRD, the YAML document separator (`---`) between the two CRDs was missing. YAML treated the entire file as a single document; EdgeConnect's fields overwrote DynaKube's fields, so only `edgeconnects.dynatrace.com` was ever created — `dynakubes.dynatrace.com` was silently lost. The operator could not find or register the DynaKube CRD.
+- **Root cause 1 — Operator CrashLoopBackOff:** Operator v1.8.1 requires the `edgeconnects.dynatrace.com` CRD with version `v1alpha2`. This CRD was present in the operator bundle but not included in `10-crds.yaml`. Without it, the operator crashed on startup with `no matches for kind "EdgeConnect" in version "dynatrace.com/v1alpha2"`.
+  - **Fix:** Extracted `edgeconnects.dynatrace.com` CRD from the bundle and added it to `10-crds.yaml`.
+
+- **Root cause 2 — Silent DynaKube CRD overwrite:** After appending the EdgeConnect CRD, the YAML document separator (`---`) between the two CRDs was missing. YAML treated the entire file as a single document; EdgeConnect's fields overwrote DynaKube's fields, so only `edgeconnects.dynatrace.com` was ever created — `dynakubes.dynatrace.com` was silently lost.
   - **Fix:** Added `---` separator between the two CRD documents in `10-crds.yaml`.
 
-- **Root cause 3 — cert-manager webhook x509 error:** When applying `02-webhook-certificate.yaml` (Certificate, Issuer, ClusterIssuer resources), the API server called the cert-manager validation webhook. The webhook's own TLS certificate had not yet been injected into its `ValidatingWebhookConfiguration` caBundle by cainjector, so the API server rejected the connection with `x509: certificate signed by unknown authority`. The endpoint polling gate confirmed the pod was reachable, but cainjector needed additional time to populate its own caBundle.
-  - **Fix:** Added a polling gate (120s) on `validatingwebhookconfiguration/cert-manager-webhook` `.webhooks[0].clientConfig.caBundle` — this runs after the endpoint gate and before any cert-manager resources are applied.
+- **Root cause 3 — cert-manager webhook x509 error:** When applying cert-manager Certificate/Issuer resources, the API server called the cert-manager validation webhook before cainjector had injected the webhook's own caBundle, resulting in `x509: certificate signed by unknown authority`.
+  - **Fix:** Added a polling gate (120s) on `validatingwebhookconfiguration/cert-manager-webhook` caBundle — runs after endpoint gate, before any cert-manager resources are applied.
 
-- **Root cause 4 — EdgeConnect caBundle not injected:** The EdgeConnect CRD also has a conversion webhook pointing to `dynatrace-webhook` but lacked the `cert-manager.io/inject-ca-from` annotation, so cainjector never populated its caBundle. The deployment gate only checked DynaKube, and the 60s timeout was too short when cainjector had to process two CRDs.
-  - **Fix:** Added `cert-manager.io/inject-ca-from: dynatrace/dynatrace-webhook` annotation to EdgeConnect CRD. Updated caBundle poll to verify both DynaKube and EdgeConnect CRDs, extended timeout to 120s with per-CRD diagnostic output on failure.
+- **Root cause 4 — EdgeConnect caBundle not injected:** The EdgeConnect CRD also has a conversion webhook pointing to `dynatrace-webhook` but lacked the `cert-manager.io/inject-ca-from` annotation, so cainjector never populated its caBundle. The 60s timeout was also too short with two CRDs to process.
+  - **Fix:** Added `cert-manager.io/inject-ca-from: dynatrace/dynatrace-webhook` to EdgeConnect CRD. Updated caBundle poll to verify both CRDs, extended timeout to 120s with per-CRD diagnostic output on failure.
 
 - **Helm pipeline brought to full parity:** All four fixes applied to `helm-scripts/staged/install.sh` and `helm-scripts/generate_helm.py`.
 
-- **Prerequisite clarified:** `helm` must be installed before running the Helm pipeline. Added install one-liner to prerequisites section.
+- **Prerequisite clarified:** `helm` must be installed before running the Helm pipeline.
 
 ---
 
 ## cert-manager Reference
 
 | Item | Value |
-|------|-------|
+| --- | --- |
 | Version | v1.14.5 (official release manifest) |
 | Components | controller, cainjector, webhook |
 | CA cert duration | 10 years (rotate deliberately) |
@@ -280,11 +293,10 @@ The upstream Dynatrace Operator bundle ships with a webhook deployment that moun
 ## Dynatrace Reference
 
 | Item | Value |
-|------|-------|
+| --- | --- |
 | Operator version | v1.8.1 |
 | Operator image | `public.ecr.aws/dynatrace/dynatrace-operator:v1.8.1` |
 | Target namespace | `dynatrace` |
 | DynaKube mode | classicFullStack (no CSI driver) |
 | ActiveGate capabilities | `routing`, `kubernetes-monitoring`, `dynatrace-api` |
 | Source CR | `dynakube_OCI.yaml` |
-| Tenant | `fzj25496.live.dynatrace.com` |
